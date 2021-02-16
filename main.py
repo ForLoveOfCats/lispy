@@ -15,11 +15,9 @@ def my_assert(expression, *message):
 			panic("Assertion failed")
 
 
-program = """((defvar my_var (+ 40 2))
-	          (print my_var)
-	          ((setvar my_var 5)
-	              (print my_var))
-	          (print my_var))"""
+program = ""
+with open("./program.lispy", "r") as file:
+	program = file.read()
 
 
 tokens = []
@@ -249,5 +247,4 @@ def evaluate(node, depth):
 	return output
 
 
-print(f"About to run `{program}`")
 evaluate(tree, 0)

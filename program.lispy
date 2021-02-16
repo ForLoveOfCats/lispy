@@ -1,0 +1,5 @@
+((defvar my_var (+ 40 2))
+	(print my_var)
+	((setvar my_var 5)
+		(print my_var))
+	(print my_var))
