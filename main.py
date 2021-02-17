@@ -207,7 +207,7 @@ defvar_symbol = interner.next("defvar")
 setvar_symbol = interner.next("setvar")
 
 
-class CallableDefunc:
+class LispLambda:
 	def __init__(self, arg_symbols, body):
 		self.arg_symbols = arg_symbols
 		self.body = body
@@ -259,7 +259,7 @@ def evaluate(node):
 					output = evaluate(node[3])
 
 			elif node[0] == lambda_symbol:
-				output = CallableDefunc(node[1], node[2])
+				output = LispLambda(node[1], node[2])
 
 			elif node[0] == defvar_symbol:
 				symbol = node[1]
