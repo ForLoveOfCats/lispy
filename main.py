@@ -72,6 +72,12 @@ class Interned:
 	def __repr__(self):
 		return self.__str__()
 
+	def __eq__(self, other):
+		return self.id == other.id
+
+	def __hash__(self):
+		return self.id.__hash__()
+
 
 class Interner:
 	def __init__(self):
@@ -177,22 +183,22 @@ def _lisp_div(*args):
 	return output
 
 state = [{
-	interner.next("list").id : lambda *args: list(args),
+	interner.next("list") : lambda *args: list(args),
 
-	interner.next("=").id : _lisp_eq,
-	interner.next(">").id : lambda a, b: a > b,
-	interner.next(">=").id : lambda a, b: a >= b,
-	interner.next("<").id : lambda a, b: a < b,
-	interner.next("<=").id : lambda a, b: a <= b,
-	interner.next("not").id : lambda a: not a,
+	interner.next("=") : _lisp_eq,
+	interner.next(">") : lambda a, b: a > b,
+	interner.next(">=") : lambda a, b: a >= b,
+	interner.next("<") : lambda a, b: a < b,
+	interner.next("<=") : lambda a, b: a <= b,
+	interner.next("not") : lambda a: not a,
 
-	interner.next("print").id : print,
+	interner.next("print") : print,
 
-	interner.next("+").id : _lisp_add,
-	interner.next("-").id : _lisp_sub,
-	interner.next("*").id : _lisp_mul,
-	interner.next("/").id : _lisp_div,
-	interner.next("mod").id : lambda a, b: a % b,
+	interner.next("+") : _lisp_add,
+	interner.next("-") : _lisp_sub,
+	interner.next("*") : _lisp_mul,
+	interner.next("/") : _lisp_div,
+	interner.next("mod") : lambda a, b: a % b,
 }]
 
 if_symbol = interner.next("if")
@@ -210,7 +216,7 @@ class CallableDefunc:
 		global state
 		frame = {}
 		for index, arg_symbol in enumerate(self.arg_symbols):
-			frame[arg_symbol.id] = args[index]
+			frame[arg_symbol] = args[index]
 		state.append(frame)
 		output = evaluate(self.body)
 		state.pop()
@@ -221,8 +227,8 @@ def lookup(interned):
 	global state
 
 	for index in reversed(range(0, len(state))):
-		if interned.id in state[index]:
-			return state[index][interned.id]
+		if interned in state[index]:
+			return state[index][interned]
 
 	raise Exception(f"Unknown symbol {interned}")
 
@@ -231,8 +237,8 @@ def overwrite(interned, value):
 	global state
 
 	for index in reversed(range(0, len(state))):
-		if interned.id in state[index]:
-			state[index][interned.id] = value
+		if interned in state[index]:
+			state[index][interned] = value
 			return
 
 	raise Exception(f"Unknown symbol {interned}")
@@ -245,24 +251,24 @@ def evaluate(node):
 
 	if isinstance(node, list):
 		if len(node) > 1 and isinstance(node[0], Interned):
-			if node[0].id == if_symbol.id:
+			if node[0] == if_symbol:
 				cond = evaluate(node[1])
 				if cond:
 					output = evaluate(node[2])
 				else:
 					output = evaluate(node[3])
 
-			elif node[0].id == lambda_symbol.id:
+			elif node[0] == lambda_symbol:
 				output = CallableDefunc(node[1], node[2])
 
-			elif node[0].id == defvar_symbol.id:
+			elif node[0] == defvar_symbol:
 				symbol = node[1]
 				value = None
 				if len(node) >= 3:
 					value = evaluate(node[2])
-				state[-2][symbol.id] = value
+				state[-2][symbol] = value
 
-			elif node[0].id == setvar_symbol.id:
+			elif node[0] == setvar_symbol:
 				symbol = node[1]
 				value = evaluate(node[2])
 				overwrite(symbol, value)
