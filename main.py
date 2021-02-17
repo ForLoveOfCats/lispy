@@ -3,6 +3,9 @@ from collections import OrderedDict
 from fractions import Fraction
 
 
+Fraction.__repr__ = Fraction.__str__
+
+
 def panic(*args):
 	print("Panic:", *args)
 	sys.exit(-1)
@@ -64,7 +67,7 @@ class Interned:
 
 	def __str__(self):
 		global interner
-		return f"Interned: '{list(interner.symbols.keys())[self.id]}'"
+		return f"'{list(interner.symbols.keys())[self.id]}'"
 
 	def __repr__(self):
 		return self.__str__()
@@ -76,6 +79,9 @@ class Interner:
 		self.symbols = OrderedDict() #Newer python does this by default, lets be safe
 
 	def next(self, symbol):
+		if not isinstance(symbol, str):
+			panic(type(symbol))
+
 		if symbol not in self.symbols:
 			index = self.next_index
 			self.next_index += 1
@@ -127,6 +133,13 @@ index = RefOfInner(1)
 tree = parse(index)
 
 
+def _lisp_eq(*args):
+	for index in range(0, len(args) - 2):
+		if args[index] != args[index + 1]:
+			return False
+	return True
+
+
 def _lisp_add(*args):
 	if len(args) == 0:
 		return None
@@ -140,8 +153,8 @@ def _lisp_sub(*args):
 	if len(args) == 0:
 		return None
 
-	output = Fraction(0)
-	for arg in args:
+	output = args[0]
+	for arg in args[1:]:
 		output -= arg
 	return output
 
@@ -164,82 +177,114 @@ def _lisp_div(*args):
 	return output
 
 state = [{
+	interner.next("list").id : lambda *args: list(args),
+
+	interner.next("=").id : _lisp_eq,
+	interner.next(">").id : lambda a, b: a > b,
+	interner.next(">=").id : lambda a, b: a >= b,
+	interner.next("<").id : lambda a, b: a < b,
+	interner.next("<=").id : lambda a, b: a <= b,
+	interner.next("not").id : lambda a: not a,
+
 	interner.next("print").id : print,
+
 	interner.next("+").id : _lisp_add,
 	interner.next("-").id : _lisp_sub,
 	interner.next("*").id : _lisp_mul,
 	interner.next("/").id : _lisp_div,
+	interner.next("mod").id : lambda a, b: a % b,
 }]
 
-if_id = interner.next("if").id
-defvar_id = interner.next("defvar").id
-setvar_id = interner.next("setvar").id
+if_symbol = interner.next("if")
+lambda_symbol = interner.next("lambda")
+defvar_symbol = interner.next("defvar")
+setvar_symbol = interner.next("setvar")
 
-def lookup(interned, depth):
+
+class CallableDefunc:
+	def __init__(self, arg_symbols, body):
+		self.arg_symbols = arg_symbols
+		self.body = body
+
+	def __call__(self, *args):
+		global state
+		frame = {}
+		for index, arg_symbol in enumerate(self.arg_symbols):
+			frame[arg_symbol.id] = args[index]
+		state.append(frame)
+		output = evaluate(self.body)
+		state.pop()
+		return output
+
+
+def lookup(interned):
 	global state
 
-	while depth >= 0:
-		found = state[depth].get(interned.id)
-		if found != None:
-			return found
-		depth -= 1
+	for index in reversed(range(0, len(state))):
+		if interned.id in state[index]:
+			return state[index][interned.id]
 
 	raise Exception(f"Unknown symbol {interned}")
 
 
-def overwrite(interned, depth, value):
+def overwrite(interned, value):
 	global state
 
-	while depth >= 0:
-		if interned.id in state[depth]:
-			state[depth][interned.id] = value
+	for index in reversed(range(0, len(state))):
+		if interned.id in state[index]:
+			state[index][interned.id] = value
 			return
-		depth -= 1
 
 	raise Exception(f"Unknown symbol {interned}")
 
 
-def evaluate(node, depth):
+def evaluate(node):
 	global state
 	state.append({})
 	output = None
 
 	if isinstance(node, list):
-		if len(node) >= 1 and isinstance(node[0], Interned):
-			if node[0].id == if_id:
-				cond = evaluate(node[1], depth + 1)
+		if len(node) > 1 and isinstance(node[0], Interned):
+			if node[0].id == if_symbol.id:
+				cond = evaluate(node[1])
 				if cond:
-					output = evaluate(node[2], depth + 1)
+					output = evaluate(node[2])
 				else:
-					output = evaluate(node[3], depth + 1)
+					output = evaluate(node[3])
 
-			elif node[0].id == defvar_id:
+			elif node[0].id == lambda_symbol.id:
+				output = CallableDefunc(node[1], node[2])
+
+			elif node[0].id == defvar_symbol.id:
 				symbol = node[1]
 				value = None
 				if len(node) >= 3:
-					value = evaluate(node[2], depth + 1)
-				state[depth][symbol.id] = value
+					value = evaluate(node[2])
+				state[-2][symbol.id] = value
 
-			elif node[0].id == setvar_id:
+			elif node[0].id == setvar_symbol.id:
 				symbol = node[1]
-				value = evaluate(node[2], depth + 1)
-				overwrite(symbol, depth, value)
+				value = evaluate(node[2])
+				overwrite(symbol, value)
+				output = value
 
 			else:
-				symbol = lookup(node[0], depth)
+				value = lookup(node[0])
 				args = []
 				for child in node[1:]:
-					args.append(evaluate(child, depth + 1))
-				output = symbol(*args)
+					args.append(evaluate(child))
+				output = value(*args)
+
+		elif len(node) == 0:
+			output = None
 
 		else:
-			output = []
 			for child in node:
-				output.append(evaluate(child, depth + 1))
+				output = evaluate(child)
 
 	else:
 		if isinstance(node, Interned):
-			output = lookup(node, depth)
+			output = lookup(node)
 		else:
 			output = node
 
@@ -247,4 +292,4 @@ def evaluate(node, depth):
 	return output
 
 
-evaluate(tree, 0)
+evaluate(tree)
