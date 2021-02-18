@@ -1,5 +1,5 @@
 ((defvar sum-even-fib (lambda (f1 f2 total)
-	(if (<= total 4000000)
+	(if (<= f2 4000000)
 		(sum-even-fib f2 (setvar f2 (+ f1 f2)) (+ total (* f2 (mod f2 2))))
 	(total))))
 (print (sum-even-fib 0 1 1)))
