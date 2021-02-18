@@ -1,4 +1,5 @@
 import sys
+import types
 from collections import OrderedDict
 from fractions import Fraction
 
@@ -283,6 +284,13 @@ def evaluate(node):
 
 		elif len(node) == 0:
 			output = None
+
+		elif isinstance(node[0], Interned):
+			value = lookup(node[0])
+			if isinstance(value, LispLambda) or isinstance(value, types.FunctionType):
+				output = value()
+			else:
+				output = value
 
 		else:
 			for child in node:
